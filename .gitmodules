@@ -1,0 +1,3 @@
+[submodule "theme/edgy"]
+	path = theme/edgy
+	url = git@github.com:wit-ctel/edgy.git
