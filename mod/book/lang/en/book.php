@@ -94,3 +94,6 @@ $string['page-mod-book-x'] = 'Any book module page';
 $string['subchapternotice'] = '(Only available once the first chapter has been created)';
 $string['subplugintype_booktool'] = 'Book tool';
 $string['subplugintype_booktool_plural'] = 'Book tools';
+$string['dnduploadbook'] = 'Upload a Book zip archive file';
+$string['badarchive'] = 'Not a valid Book zip archive file';
+$string['nohtml'] = 'No HTML found in Book Zip archive file';
