@@ -24,6 +24,9 @@
 
 defined('MOODLE_INTERNAL') || die;
 
+// Borrowing the functions from here
+require_once($CFG->dirroot.'/mod/book/tool/importhtml/locallib.php');
+
 /**
  * Returns list of available numbering types
  * @return array
@@ -597,4 +600,84 @@ function book_export_contents($cm, $baseurl) {
     array_unshift($contents, $structurefile);
 
     return $contents;
+}
+
+/**
+ * Register for Drag and Drop upload
+ * Accept zip files
+ */
+function book_dndupload_register() {
+    return array('files' => array(
+      array('extension' => 'zip', 'message' => get_string('dnduploadbook', 'mod_book'))
+    ));	
+}
+
+/**
+ * Handle the drag and drop action
+ * 
+ */
+function book_dndupload_handle($uploadinfo) {
+    $context = context_module::instance($uploadinfo->coursemodule);
+    file_save_draft_area_files($uploadinfo->draftitemid, $context->id, 'mod_book', 'package', 0);
+    $fs = get_file_storage();
+    $files = $fs->get_area_files($context->id, 'mod_book', 'package', 0, 'sortorder, itemid, filepath, filename', false);
+    $file = reset($files);
+    // Validate the file
+    $errors = book_validate_package($file);
+
+    if (!empty($errors)) {
+      return false;
+    }
+    
+    // Create a default book object to pass to book_add_instance()!
+    $book = get_config('book');
+    $book->course = $uploadinfo->course->id;
+    $book->coursemodule = $uploadinfo->coursemodule;
+    $book->name = $uploadinfo->displayname;
+    $book->intro = '<p>'.$uploadinfo->displayname.'</p>';
+    $book->introformat = FORMAT_HTML;
+    $book->numbering = 1;
+    // Start at revision 0, this will get incremented to 1 when we import chapters.
+    $book->revision = 0;
+    $type = 2;
+    $book->id = book_add_instance($book, null);
+
+    toolbook_importhtml_import_chapters($file, 2, $book, $context, false);
+    // Clean down draftitem area
+    $fs->delete_area_files($context->id, 'mod_book', 'package', 0);
+    return $book->id;
+}
+
+/**
+ * Validate book package
+ * 
+ */
+function book_validate_package($file) {
+    $packer = get_file_packer('application/zip');
+    $errors = array();
+    
+    if ($file->is_external_file()) { // Get zip file so we can check it is correct.
+        $file->import_external_file_contents();
+    }
+    
+    $filelist = $file->list_files($packer);
+    
+    if (!is_array($filelist)) {
+        $errors['packagefile'] = get_string('badarchive', 'book');
+    } else {
+        $htmlfound = false;
+        foreach ($filelist as $info) {
+            $extension = pathinfo($info->pathname);
+            if ($extension['extension'] == 'html') {
+                $htmlfound = true;
+                return array();
+            }
+        }
+        
+        if (!$htmlfound) {
+            $errors['packagefile'] = get_string('nohtml', 'book');
+        }
+    }
+    
+    return $errors;
 }
