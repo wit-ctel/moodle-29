@@ -13,6 +13,6 @@
 [submodule "blocks/academic_year"]
 	path = blocks/academic_year
 	url = git@github.com:wit-ctel/Moodle-block_academic-year.git
-[submodule "local/academic-year"]
-	path = local/academic-year
+[submodule "local/academicyear"]
+	path = local/academicyear
 	url = git@github.com:wit-ctel/Moodle-local_academic-year.git
