@@ -10,3 +10,6 @@
 [submodule "blocks/progress"]
 	path = blocks/progress
 	url = git@github.com:wit-ctel/Moodle-block_progress.git
+[submodule "blocks/academic_year"]
+	path = blocks/academic_year
+	url = git@github.com:wit-ctel/Moodle-block_academic-year.git
