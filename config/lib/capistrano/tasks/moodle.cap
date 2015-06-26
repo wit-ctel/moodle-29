@@ -1,0 +1,8 @@
+namespace :moodle do
+  desc 'Copy config.php to release directory'
+  task :'copy-config' do 
+    on roles(:web) do
+      execute :cp, shared_path.join('config.php'), release_path
+    end
+  end
+end
