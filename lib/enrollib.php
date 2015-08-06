@@ -522,8 +522,8 @@ function enrol_add_course_navigation(navigation_node $coursenode, $course) {
  * @return array
  */
 function enrol_get_my_courses($fields = NULL, $sort = 'visible DESC,sortorder ASC', $limit = 0) {
-    global $DB, $USER;
-
+    global $DB, $USER, $SESSION, $CFG;
+    
     // Guest account does not have any courses
     if (isguestuser() or !isloggedin()) {
         return(array());
@@ -566,7 +566,7 @@ function enrol_get_my_courses($fields = NULL, $sort = 'visible DESC,sortorder AS
         $orderby = "ORDER BY $sort";
     }
 
-    $wheres = array("c.id <> :siteid");
+    $wheres = array("c.id <> :siteid", "(acyear.academicyearid = :academicyearid OR acyear.academicyearid IS NULL)");
     $params = array('siteid'=>SITEID);
 
     if (isset($USER->loginascontext) and $USER->loginascontext->contextlevel == CONTEXT_COURSE) {
@@ -590,6 +590,7 @@ function enrol_get_my_courses($fields = NULL, $sort = 'visible DESC,sortorder AS
                      WHERE ue.status = :active AND e.status = :enabled AND ue.timestart < :now1 AND (ue.timeend = 0 OR ue.timeend > :now2)
                    ) en ON (en.courseid = c.id)
            $ccjoin
+           LEFT JOIN {local_academicyear_course} acyear ON (c.id = acyear.courseid) 
              WHERE $wheres
           $orderby";
     $params['userid']  = $USER->id;
@@ -597,7 +598,8 @@ function enrol_get_my_courses($fields = NULL, $sort = 'visible DESC,sortorder AS
     $params['enabled'] = ENROL_INSTANCE_ENABLED;
     $params['now1']    = round(time(), -2); // improves db caching
     $params['now2']    = $params['now1'];
-
+    $params['academicyearid'] = isset($SESSION->academic_year_id) ? $SESSION->academic_year_id : $CFG->academic_year_id;
+    
     $courses = $DB->get_records_sql($sql, $params, 0, $limit);
 
     // preload contexts and check visibility
