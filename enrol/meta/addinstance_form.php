@@ -83,11 +83,11 @@ class enrol_meta_addinstance_form extends moodleform {
 
         $mform->addElement('header','general', get_string('pluginname', 'enrol_meta'));
 
-        $mform->addElement('select', 'link', get_string('linkedcourse', 'enrol_meta'), $courses);
-        $mform->addRule('link', get_string('required'), 'required', null, 'client');
+        $mform->addElement('html', '<h3>Enter the CRN of the module, including term. E.G. 12345.2013</h3>');
 
-        $mform->addElement('select', 'customint2', get_string('addgroup', 'enrol_meta'), $groups);
-
+        $mform->addElement('text', 'idnumber', 'CRN');
+        $mform->setType('idnumber', PARAM_TEXT);
+        
         $mform->addElement('hidden', 'id', null);
         $mform->setType('id', PARAM_INT);
 
@@ -132,7 +132,7 @@ class enrol_meta_addinstance_form extends moodleform {
 
         // TODO: this is duplicated here because it may be necessary once we implement ajax course selection element
 
-        if (!$c = $DB->get_record('course', array('id'=>$data['link']))) {
+        if (!$c = $DB->get_record('course', array('idnumber' => $data['idnumber']))) {
             $errors['link'] = get_string('required');
         } else {
             $coursecontext = context_course::instance($c->id);
