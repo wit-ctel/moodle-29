@@ -2241,7 +2241,7 @@ function check_database_storage_engine(environment_results $result) {
 function check_slasharguments(environment_results $result){
     global $CFG;
 
-    if (empty($CFG->slasharguments)) {
+    if (!during_initial_install() && empty($CFG->slasharguments)) {
         $result->setInfo('slasharguments');
         $result->setStatus(false);
         return $result;
@@ -2303,10 +2303,10 @@ function upgrade_minmaxgrade() {
 
     // Identify the courses that have inconsistencies grade_item vs grade_grade.
     $sql = "SELECT DISTINCT(gi.courseid)
-              FROM {grade_items} gi
-              JOIN {grade_grades} gg
+              FROM {grade_grades} gg
+              JOIN {grade_items} gi
                 ON gg.itemid = gi.id
-             WHERE (gi.itemtype != ? AND gi.itemtype != ?)
+             WHERE gi.itemtype NOT IN (?, ?)
                AND (gg.rawgrademax != gi.grademax OR gg.rawgrademin != gi.grademin)";
 
     $rs = $DB->get_recordset_sql($sql, array('course', 'category'));
