@@ -31,7 +31,7 @@ require_once('lib.php');
 if (!isset($CFG->additionalhtmlhead)) {
     $CFG->additionalhtmlhead = '';
 }
-$CFG->additionalhtmlhead .= '<meta name="robots" content="noindex" />';
+
 
 redirect_if_major_upgrade_required();
 
