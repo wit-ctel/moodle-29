@@ -13,3 +13,6 @@
 [submodule "local/academicyear"]
 	path = local/academicyear
 	url = git@github.com:wit-ctel/Moodle-local_academic-year.git
+[submodule "mod/readinglist"]
+	path = mod/readinglist
+	url = git@github.com:wit-ctel/readinglist.git
