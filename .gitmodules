@@ -19,3 +19,6 @@
 [submodule "blocks/attendance"]
 	path = blocks/attendance
 	url = git@github.com:wit-ctel/moodle-block_attendance.git
+[submodule "mod/attendance"]
+	path = mod/attendance
+	url = git@github.com:wit-ctel/moodle-mod_attendance.git
