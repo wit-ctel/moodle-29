@@ -39,6 +39,13 @@ class grade_report_grader extends grade_report {
     public $grades;
 
     /**
+     * Contains all the grades for the course - even the ones not displayed in the grade tree.
+     *
+     * @var array $allgrades
+     */
+    private $allgrades;
+
+    /**
      * Array of errors for bulk grades updating.
      * @var array $gradeserror
      */
@@ -538,8 +545,10 @@ class grade_report_grader extends grade_report {
 
         if ($grades = $DB->get_records_sql($sql, $params)) {
             foreach ($grades as $graderec) {
+                $grade = new grade_grade($graderec, false);
+                $this->allgrades[$graderec->userid][$graderec->itemid] = $grade;
                 if (in_array($graderec->userid, $userids) and array_key_exists($graderec->itemid, $this->gtree->get_items())) { // some items may not be present!!
-                    $this->grades[$graderec->userid][$graderec->itemid] = new grade_grade($graderec, false);
+                    $this->grades[$graderec->userid][$graderec->itemid] = $grade;
                     $this->grades[$graderec->userid][$graderec->itemid]->grade_item = $this->gtree->get_item($graderec->itemid); // db caching
                 }
             }
@@ -553,6 +562,8 @@ class grade_report_grader extends grade_report {
                     $this->grades[$userid][$itemid]->itemid = $itemid;
                     $this->grades[$userid][$itemid]->userid = $userid;
                     $this->grades[$userid][$itemid]->grade_item = $this->gtree->get_item($itemid); // db caching
+
+                    $this->allgrades[$userid][$itemid] = $this->grades[$userid][$itemid];
                 }
             }
         }
@@ -589,9 +600,16 @@ class grade_report_grader extends grade_report {
         $rows = array();
 
         $showuserimage = $this->get_pref('showuserimage');
-        $canseeuserreport = has_capability('gradereport/'.$CFG->grade_profilereport.':view', $this->context);
-        $canseesingleview = has_all_capabilities(array('gradereport/singleview:view', 'moodle/grade:viewall',
+        // FIXME: MDL-52678 This get_capability_info is hacky and we should have an API for inserting grade row links instead.
+        $canseeuserreport = false;
+        $canseesingleview = false;
+        if (get_capability_info('gradereport/'.$CFG->grade_profilereport.':view')) {
+            $canseeuserreport = has_capability('gradereport/'.$CFG->grade_profilereport.':view', $this->context);
+        }
+        if (get_capability_info('gradereport/singleview:view')) {
+            $canseesingleview = has_all_capabilities(array('gradereport/singleview:view', 'moodle/grade:viewall',
             'moodle/grade:edit'), $this->context);
+        }
         $hasuserreportcell = $canseeuserreport || $canseesingleview;
 
         $strfeedback  = $this->get_lang_string("feedback");
@@ -746,7 +764,8 @@ class grade_report_grader extends grade_report {
             'cfg'       => array('ajaxenabled'=>false),
             'items'     => array(),
             'users'     => array(),
-            'feedback'  => array()
+            'feedback'  => array(),
+            'grades'    => array()
         );
         $jsscales = array();
 
@@ -837,17 +856,21 @@ class grade_report_grader extends grade_report {
                     }
 
                     $singleview = '';
-                    if (has_all_capabilities(array('gradereport/singleview:view', 'moodle/grade:viewall',
-                        'moodle/grade:edit'), $this->context)) {
 
-                        $url = new moodle_url('/grade/report/singleview/index.php', array(
-                            'id' => $this->course->id,
-                            'item' => 'grade',
-                            'itemid' => $element['object']->id));
-                        $singleview = $OUTPUT->action_icon(
-                            $url,
-                            new pix_icon('t/editstring', get_string('singleview', 'grades', $element['object']->get_name()))
-                        );
+                    // FIXME: MDL-52678 This is extremely hacky we should have an API for inserting grade column links.
+                    if (get_capability_info('gradereport/singleview:view')) {
+                        if (has_all_capabilities(array('gradereport/singleview:view', 'moodle/grade:viewall',
+                            'moodle/grade:edit'), $this->context)) {
+
+                            $url = new moodle_url('/grade/report/singleview/index.php', array(
+                                'id' => $this->course->id,
+                                'item' => 'grade',
+                                'itemid' => $element['object']->id));
+                            $singleview = $OUTPUT->action_icon(
+                                $url,
+                                new pix_icon('t/editstring', get_string('singleview', 'grades', $element['object']->get_name()))
+                            );
+                        }
                     }
 
                     $itemcell->colspan = $colspan;
@@ -886,13 +909,23 @@ class grade_report_grader extends grade_report {
         }
         $jsscales = $scalesarray;
 
+        // Get all the grade items if the user can not view hidden grade items.
+        // It is possible that the user is simply viewing the 'Course total' by switching to the 'Aggregates only' view
+        // and that this user does not have the ability to view hidden items. In this case we still need to pass all the
+        // grade items (in case one has been hidden) as the course total shown needs to be adjusted for this particular
+        // user.
+        if (!$this->canviewhidden) {
+            $allgradeitems = grade_item::fetch_all(array('courseid' => $this->courseid));
+        }
+
         foreach ($this->users as $userid => $user) {
 
             if ($this->canviewhidden) {
                 $altered = array();
                 $unknown = array();
             } else {
-                $hidingaffected = grade_grade::get_hiding_affected($this->grades[$userid], $this->gtree->get_items());
+                $usergrades = $this->allgrades[$userid];
+                $hidingaffected = grade_grade::get_hiding_affected($usergrades, $allgradeitems);
                 $altered = $hidingaffected['altered'];
                 $unknown = $hidingaffected['unknown'];
                 unset($hidingaffected);
@@ -1001,6 +1034,14 @@ class grade_report_grader extends grade_report {
                 } else if ($USER->gradeediting[$this->courseid]) {
 
                     if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
+                        $itemcell->attributes['class'] .= ' grade_type_scale';
+                    } else if ($item->gradetype == GRADE_TYPE_VALUE) {
+                        $itemcell->attributes['class'] .= ' grade_type_value';
+                    } else if ($item->gradetype == GRADE_TYPE_TEXT) {
+                        $itemcell->attributes['class'] .= ' grade_type_text';
+                    }
+
+                    if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
                         $scale = $scalesarray[$item->scaleid];
                         $gradeval = (int)$gradeval; // scales use only integers
                         $scales = explode(",", $scale->scale);
@@ -1069,16 +1110,16 @@ class grade_report_grader extends grade_report {
 
                     if ($item->scaleid && !empty($scalesarray[$item->scaleid])) {
                         $itemcell->attributes['class'] .= ' grade_type_scale';
-                    } else if ($item->gradetype != GRADE_TYPE_TEXT) {
+                    } else if ($item->gradetype == GRADE_TYPE_VALUE) {
+                        $itemcell->attributes['class'] .= ' grade_type_value';
+                    } else if ($item->gradetype == GRADE_TYPE_TEXT) {
                         $itemcell->attributes['class'] .= ' grade_type_text';
                     }
 
-                    if ($enableajax) {
-                        $canoverride = true;
-                        if ($item->is_category_item() || $item->is_course_item()) {
-                            $canoverride = (bool) get_config('moodle', 'grade_overridecat');
-                        }
-                        if ($canoverride) {
+                    // Only allow edting if the grade is editable (not locked, not in a unoverridable category, etc).
+                    if ($enableajax && $grade->is_editable()) {
+                        // If a grade item is type text, and we don't have show quick feedback on, it can't be edited.
+                        if ($item->gradetype != GRADE_TYPE_TEXT || $showquickfeedback) {
                             $itemcell->attributes['class'] .= ' clickable';
                         }
                     }
@@ -1100,6 +1141,14 @@ class grade_report_grader extends grade_report {
                     }
                 }
 
+                // Enable keyboard navigation if the grade is editable (not locked, not in a unoverridable category, etc).
+                if ($enableajax && $grade->is_editable()) {
+                    // If a grade item is type text, and we don't have show quick feedback on, it can't be edited.
+                    if ($item->gradetype != GRADE_TYPE_TEXT || $showquickfeedback) {
+                        $itemcell->attributes['class'] .= ' gbnavigable';
+                    }
+                }
+
                 if (!empty($this->gradeserror[$item->id][$userid])) {
                     $itemcell->text .= $this->gradeserror[$item->id][$userid];
                 }
@@ -1113,7 +1162,8 @@ class grade_report_grader extends grade_report {
             $jsarguments['cfg']['ajaxenabled'] = true;
             $jsarguments['cfg']['scales'] = array();
             foreach ($jsscales as $scale) {
-                $jsarguments['cfg']['scales'][$scale->id] = explode(',', $scale->scale);
+                // Trim the scale values, as they may have a space that is ommitted from values later.
+                $jsarguments['cfg']['scales'][$scale->id] = array_map('trim', explode(',', $scale->scale));
             }
             $jsarguments['cfg']['feedbacktrunclength'] =  $this->feedback_trunc_length;
 

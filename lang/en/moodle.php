@@ -1170,6 +1170,7 @@ $string['missingteacher'] = 'Must choose something';
 $string['missingurl'] = 'Missing URL';
 $string['missingusername'] = 'Missing username';
 $string['moddoesnotsupporttype'] = 'Module {$a->modname} does not support uploads of type {$a->type}';
+$string['moodlelogo'] = 'Moodle logo';
 $string['month'] = 'Month';
 $string['months'] = 'Months';
 $string['modified'] = 'Modified';
@@ -1550,6 +1551,7 @@ $string['restorecancelled'] = 'Restore cancelled';
 $string['restorecannotassignroles'] = 'Restore needs to assign roles and you do not have permission to do so';
 $string['restorecannotcreateorassignroles'] = 'Restore needs to create or assign roles and you do not have permission to do so';
 $string['restorecannotcreateuser'] = 'Restore needs to create user \'{$a}\' from backup file and you do not have permission to do so';
+$string['restoremnethostidmismatch'] = 'MNet host id of user \'{$a}\' does not match local MNet host ID.';
 $string['restorecannotoverrideperms'] = 'Restore needs to override permissions and you do not have permission to do so';
 $string['restorecoursenow'] = 'Restore this course now!';
 $string['restoredaccount'] = 'Restored account';
@@ -1823,6 +1825,11 @@ $string['teacheronly'] = 'for the {$a} only';
 $string['teacherroles'] = '{$a} roles';
 $string['teachers'] = 'Teachers';
 $string['textediting'] = 'Text editor';
+$string['textediting_help'] = 'If an HTML editor such as Atto or TinyMCE is selected, text input areas will have a toolbar with buttons for easily adding content.
+
+If \'plain text area\' is selected, a format for text input areas such as HTML or Markdown can be chosen.
+
+The list of available text editors is determined by the site administrator.';
 $string['texteditor'] = 'Use standard web forms';
 $string['textformat'] = 'Plain text format';
 $string['thanks'] = 'Thanks';

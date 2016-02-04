@@ -24,14 +24,16 @@
 
 module.exports = function(grunt) {
     var path = require('path'),
+        fs = require('fs'),
         tasks = {},
-        cwd = process.env.PWD || process.cwd();
+        cwd = process.env.PWD || process.cwd(),
+        inAMD = path.basename(cwd) == 'amd';
 
     // Project configuration.
     grunt.initConfig({
         jshint: {
             options: {jshintrc: '.jshintrc'},
-            files: ['**/amd/src/*.js']
+            files: [inAMD ? cwd + '/src/*.js' : '**/amd/src/*.js']
         },
         uglify: {
             dynamic_mappings: {
@@ -49,6 +51,17 @@ module.exports = function(grunt) {
                     }
                 )
             }
+        },
+        less: {
+            bootstrapbase: {
+                files: {
+                    "theme/bootstrapbase/style/moodle.css": "theme/bootstrapbase/less/moodle.less",
+                    "theme/bootstrapbase/style/editor.css": "theme/bootstrapbase/less/editor.less",
+                },
+                options: {
+                    compress: true
+                }
+           }
         }
     });
 
@@ -102,22 +115,107 @@ module.exports = function(grunt) {
                 args.push('--lint-stderr');
             }
 
-            // Actually run shifter.
-            shifter = exec("node", args, {
-                cwd: cwd,
-                stdio: 'inherit',
-                env: process.env
-            });
+            if (grunt.option('no-color')) {
+                args.push('--color=false');
+            }
 
-            // Tidy up after exec.
-            shifter.on('exit', function (code) {
-                if (code) {
-                    grunt.fail.fatal('Shifter failed with code: ' + code);
-                } else {
-                    grunt.log.ok('Shifter build complete.');
-                    done();
-                }
-            });
+            var execShifter = function() {
+
+                shifter = exec("node", args, {
+                    cwd: cwd,
+                    stdio: 'inherit',
+                    env: process.env
+                });
+
+                // Tidy up after exec.
+                shifter.on('exit', function (code) {
+                    if (code) {
+                        grunt.fail.fatal('Shifter failed with code: ' + code);
+                    } else {
+                        grunt.log.ok('Shifter build complete.');
+                        done();
+                    }
+                });
+            };
+
+            // Actually run shifter.
+            if (!options.recursive) {
+                execShifter();
+            } else {
+                // Check that there are yui modules otherwise shifter ends with exit code 1.
+                var found = false;
+                var hasYuiModules = function(directory, callback) {
+                    fs.readdir(directory, function(err, files) {
+                        if (err) {
+                            return callback(err, null);
+                        }
+
+                        // If we already found a match there is no need to continue scanning.
+                        if (found === true) {
+                            return;
+                        }
+
+                        // We need to track the number of files to know when we return a result.
+                        var pending = files.length;
+
+                        // We first check files, so if there is a match we don't need further
+                        // async calls and we just return a true.
+                        for (var i = 0; i < files.length; i++) {
+                            if (files[i] === 'yui') {
+                                return callback(null, true);
+                            }
+                        }
+
+                        // Iterate through subdirs if there were no matches.
+                        files.forEach(function (file) {
+
+                            var p = path.join(directory, file);
+                            stat = fs.statSync(p);
+                            if (!stat.isDirectory()) {
+                                pending--;
+                            } else {
+
+                                // We defer the pending-1 until we scan the whole dir and subdirs.
+                                hasYuiModules(p, function(err, result) {
+                                    if (err) {
+                                        return callback(err);
+                                    }
+
+                                    if (result === true) {
+                                        // Once we get a true we notify the caller.
+                                        found = true;
+                                        return callback(null, true);
+                                    }
+
+                                    pending--;
+                                    if (pending === 0) {
+                                        // Notify the caller that the whole dir has been scaned and there are no matches.
+                                        return callback(null, false);
+                                    }
+                                });
+                            }
+
+                            // No subdirs here, otherwise the return would be deferred until all subdirs are scanned.
+                            if (pending === 0) {
+                                return callback(null, false);
+                            }
+                        });
+                    });
+                };
+
+                hasYuiModules(cwd, function(err, result) {
+                    if (err) {
+                        grunt.fail.fatal(err.message);
+                    }
+
+                    if (result === true) {
+                        execShifter();
+                    } else {
+                        grunt.log.ok('No YUI modules to build.');
+                        done();
+                    }
+                });
+            }
     };
 
     tasks.startup = function() {
@@ -125,14 +223,12 @@ module.exports = function(grunt) {
         if (path.basename(path.resolve(cwd, '../../')) == 'yui') {
             grunt.task.run('shifter');
         // Are we in an AMD directory?
-        } else if (path.basename(cwd) == 'amd') {
-            grunt.task.run('jshint');
-            grunt.task.run('uglify');
+        } else if (inAMD) {
+            grunt.task.run('amd');
         } else {
             // Run them all!.
-            grunt.task.run('shifter');
-            grunt.task.run('jshint');
-            grunt.task.run('uglify');
+            grunt.task.run('css');
+            grunt.task.run('js');
         }
     };
 
@@ -140,9 +236,15 @@ module.exports = function(grunt) {
     // Register NPM tasks.
     grunt.loadNpmTasks('grunt-contrib-uglify');
     grunt.loadNpmTasks('grunt-contrib-jshint');
+    grunt.loadNpmTasks('grunt-contrib-less');
 
-    // Register the shifter task.
+    // Register JS tasks.
     grunt.registerTask('shifter', 'Run Shifter against the current directory', tasks.shifter);
+    grunt.registerTask('amd', ['jshint', 'uglify']);
+    grunt.registerTask('js', ['amd', 'shifter']);
+
+    // Register CSS taks.
+    grunt.registerTask('css', ['less:bootstrapbase']);
 
     // Register the startup task.
     grunt.registerTask('startup', 'Run the correct tasks for the current directory', tasks.startup);
