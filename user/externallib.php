@@ -180,7 +180,8 @@ class core_user_external extends external_api {
             // Make sure we validate current user info as handled by current GUI. See user/editadvanced_form.php func validation().
             if (!validate_email($user['email'])) {
                 throw new invalid_parameter_exception('Email address is invalid: '.$user['email']);
-            } else if ($DB->record_exists('user', array('email' => $user['email'], 'mnethostid' => $user['mnethostid']))) {
+            } else if (empty($CFG->allowaccountssameemail) &&
+                    $DB->record_exists('user', array('email' => $user['email'], 'mnethostid' => $user['mnethostid']))) {
                 throw new invalid_parameter_exception('Email address already exists: '.$user['email']);
             }
             // End of user info validation.
@@ -1394,7 +1395,7 @@ class core_user_external extends external_api {
             profile_view($user, $usercontext);
         } else {
             // Case like user/view.php.
-            if (!$currentuser and !is_enrolled($coursecontext, $user->id)) {
+            if (!$currentuser and !can_access_course($course, $user, '', true)) {
                 throw new moodle_exception('notenrolledprofile');
             }
 
