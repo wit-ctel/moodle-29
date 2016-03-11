@@ -418,6 +418,15 @@ if (has_capability('mod/workshop:viewallassessments', $workshop->context) or ($o
     }
 }
 
+// display workshop conclusion
+if (trim($workshop->conclusion)) {
+    $conclusion = file_rewrite_pluginfile_urls($workshop->conclusion, 'pluginfile.php', $workshop->context->id,
+        'mod_workshop', 'conclusion', 0, workshop::instruction_editors_options($workshop->context));
+    print_collapsible_region_start('', 'workshop-viewlet-conclusion', get_string('conclusion', 'workshop'));
+    echo $output->box(format_text($conclusion, $workshop->conclusionformat, array('overflowdiv'=>true)), array('generalbox', 'conclusion'));
+    print_collapsible_region_end();
+}
+
 if (!$edit and $canoverride) {
     // display a form to override the submission grade
     $feedbackform->display();
