@@ -33,20 +33,27 @@ defined('MOODLE_INTERNAL') || die();
 
 class block_student_fee_renderer extends plugin_renderer_base {
     
-    public function display_balance($balance){
-        
-        // convert balance to floating point number
-        // - if invalid number, return empty string
-        // determine if balance is overdue, balance > 0
-        // format balance for output
+    public function display_balance($balance, $overduenotice){
         
         $template = new stdClass();
-        $template->balance = $balance;
-        $template->isoverdue = false;
+        $template->balance = $this->format_balance_for_output($balance);
+        $template->overduenotice = $overduenotice;
+        $template->isoverdue = ($balance > 0 ? true : false);
         
         return $this->render_from_template('block_student_fee/balance', $template);
     }
     
-
+    private function format_balance_for_output($in) {
+        $balance = number_format(abs($in), 2);
+        
+        if ($in >= 0) {
+            $balance .= " DR";
+        } else {
+            $balance .= " CR";
+        }
+    
+        return $balance;
+    }
+    
 }
     
