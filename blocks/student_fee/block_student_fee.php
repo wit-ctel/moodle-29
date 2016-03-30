@@ -38,25 +38,34 @@ class block_student_fee extends block_base {
      * @return stdClass contents of block
      */
     public function get_content() {
-        global $CFG, $USER, $DB, $OUTPUT, $PAGE;
+        global $USER;
         
         if($this->content !== NULL) {
             return $this->content;
         }
         
-        if (!isloggedin() or isguestuser()) {
-            return '';      // Never useful unless you are logged in as real user
-        }
-        
-        $renderer = $this->page->get_renderer('block_student_fee');
-        
         $this->content = new stdClass();
         $this->content->text = '';
         $this->content->footer = '';
         
+        if (!isloggedin() or isguestuser()) {
+            return '';      // Never useful unless you are logged in as real user
+        }
+        
+        $feebalancefield = get_config('block_student_fee', 'feebalance_field_title');
+        
         // check we have a custom profile field for 'feebalance'
-        if (isset($USER->profile) && isset($USER->profile["feebalance"])) {
-            $this->content->text .= $renderer->display_balance($USER->profile["feebalance"]);
+        if (isset($USER->profile) && isset($USER->profile[$feebalancefield])) {
+            $renderer = $this->page->get_renderer('block_student_fee');
+            $overduenotice = get_config('block_student_fee', 'overdue_notice');
+            
+            $feebalance = str_replace(array(",", "€"), '', $USER->profile[$feebalancefield]);
+            
+            if (!is_numeric($feebalance)) { // only work with numeric balances
+                return $this->content;
+            }
+            
+            $this->content->text .= $renderer->display_balance($feebalance, $overduenotice);
         }    
         
         return $this->content;
