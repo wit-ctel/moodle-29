@@ -28,3 +28,6 @@
  $string['student_fee:myaddinstance'] = 'Add a new student fees block to Dashboard';
  $string['labeloverduenotice'] = 'Overdue fee notice';
  $string['descoverduenotice'] = 'Add a notice to display to students with overdue fees';
+ $string['labelfeebalancefieldtitle'] = 'User profile fee field title';
+ $string['desfeebalancefieldtitle'] = 'Give the title of the user profile field that holds the fee balance';
+ $string['defaultfeebalancefieldtitle'] = 'feebalance';
