@@ -24,8 +24,15 @@
 
 defined('MOODLE_INTERNAL') || die;
 
+$settings->add(new admin_setting_configtext(
+            'block_student_fee/feebalance_field_title',
+            get_string('labelfeebalancefieldtitle', 'block_student_fee'),
+            get_string('desfeebalancefieldtitle', 'block_student_fee'),
+            get_string('defaultfeebalancefieldtitle', 'block_student_fee')
+        ));
+
 $settings->add(new admin_setting_confightmleditor(
-            'student_fee/Overdue_Notice',
+            'block_student_fee/overdue_notice',
             get_string('labeloverduenotice', 'block_student_fee'),
             get_string('descoverduenotice', 'block_student_fee'),
             ""
