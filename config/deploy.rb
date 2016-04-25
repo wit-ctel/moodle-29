@@ -38,6 +38,7 @@ set :user, 'moodle'
 set :keep_releases, 3
 
 namespace :deploy do
-  after :finishing, 'deploy:cleanup'
-  after :publishing, 'moodle:copy-config'
+  after :finishing,   'deploy:cleanup'
+  after :published,   'moodle:copy-config'
+  after :finished,    'php_fpm:restart'
 end
