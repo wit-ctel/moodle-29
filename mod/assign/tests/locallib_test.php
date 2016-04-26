@@ -2278,8 +2278,8 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         $this->setUser($manager);
         $gradingtable = new assign_grading_table($assign, 1, '', 0, true);
         $output = $assign->get_renderer()->render($gradingtable);
-        $this->assertEquals(false, strpos($output, get_string('hiddenuser', 'assign')));
-        $this->assertEquals(true, strpos($output, fullname($student)));    //students full name doesn't appear.
+        $this->assertEquals(true, strpos($output, get_string('hiddenuser', 'assign')));
+        $this->assertEquals(true, strpos($output, fullname($student)));
     }
 
     /**
@@ -2329,5 +2329,118 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         $this->assertTrue(in_array($this->extrastudents[0]->id, $allgroupmembers));
         $this->assertTrue(in_array($this->extrastudents[1]->id , $allgroupmembers));
     }
-}
 
+    /**
+     * Test get plugins file areas
+     */
+    public function test_get_plugins_file_areas() {
+        $this->setUser($this->editingteachers[0]);
+        $assign = $this->create_instance();
+
+        // Test that all the submission and feedback plugins are returning the expected file aras.
+        $usingfilearea = 0;
+        foreach ($assign->get_submission_plugins() as $plugin) {
+            $type = $plugin->get_type();
+            $fileareas = $plugin->get_file_areas();
+
+            if ($type == 'onlinetext') {
+                $this->assertEquals(array('submissions_onlinetext' => 'Online text'), $fileareas);
+                $usingfilearea++;
+            } else if ($type == 'file') {
+                $this->assertEquals(array('submission_files' => 'File submissions'), $fileareas);
+                $usingfilearea++;
+            } else {
+                $this->assertEmpty($fileareas);
+            }
+        }
+        $this->assertEquals(2, $usingfilearea);
+
+        $usingfilearea = 0;
+        foreach ($assign->get_feedback_plugins() as $plugin) {
+            $type = $plugin->get_type();
+            $fileareas = $plugin->get_file_areas();
+
+            if ($type == 'editpdf') {
+                $this->assertEquals(array('download' => 'Annotate PDF'), $fileareas);
+                $usingfilearea++;
+            } else if ($type == 'file') {
+                $this->assertEquals(array('feedback_files' => 'Feedback files'), $fileareas);
+                $usingfilearea++;
+            } else {
+                $this->assertEmpty($fileareas);
+            }
+        }
+        $this->assertEquals(2, $usingfilearea);
+    }
+
+    /**
+     * Test the quicksave grades processor
+     */
+    public function test_process_save_quick_grades() {
+        $this->editingteachers[0]->ignoresesskey = true;
+        $this->setUser($this->editingteachers[0]);
+
+        $assign = $this->create_instance(array('attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL));
+
+        // Initially grade the user.
+        $grade = $assign->get_user_grade($this->students[0]->id, false);
+        if (!$grade) {
+            $grade = new stdClass();
+            $grade->attemptnumber = '';
+            $grade->timemodified = '';
+        }
+        $data = array(
+            'grademodified_' . $this->students[0]->id => $grade->timemodified,
+            'gradeattempt_' . $this->students[0]->id => $grade->attemptnumber,
+            'quickgrade_' . $this->students[0]->id => '60.0'
+        );
+        $result = $assign->testable_process_save_quick_grades($data);
+        $this->assertContains(get_string('quickgradingchangessaved', 'assign'), $result);
+        $grade = $assign->get_user_grade($this->students[0]->id, false);
+        $this->assertEquals('60.0', $grade->grade);
+
+        // Attempt to grade with a past attempts grade info.
+        $assign->testable_process_add_attempt($this->students[0]->id);
+        $data = array(
+            'grademodified_' . $this->students[0]->id => $grade->timemodified,
+            'gradeattempt_' . $this->students[0]->id => $grade->attemptnumber,
+            'quickgrade_' . $this->students[0]->id => '50.0'
+        );
+        $result = $assign->testable_process_save_quick_grades($data);
+        $this->assertContains(get_string('errorrecordmodified', 'assign'), $result);
+        $grade = $assign->get_user_grade($this->students[0]->id, false);
+        $this->assertFalse($grade);
+
+        // Attempt to grade a the attempt.
+        $submission = $assign->get_user_submission($this->students[0]->id, false);
+        $data = array(
+            'grademodified_' . $this->students[0]->id => '',
+            'gradeattempt_' . $this->students[0]->id => $submission->attemptnumber,
+            'quickgrade_' . $this->students[0]->id => '40.0'
+        );
+        $result = $assign->testable_process_save_quick_grades($data);
+        $this->assertContains(get_string('quickgradingchangessaved', 'assign'), $result);
+        $grade = $assign->get_user_grade($this->students[0]->id, false);
+        $this->assertEquals('40.0', $grade->grade);
+
+        // Catch grade update conflicts.
+        // Save old data for later.
+        $pastdata = $data;
+        // Update the grade the 'good' way.
+        $data = array(
+            'grademodified_' . $this->students[0]->id => $grade->timemodified,
+            'gradeattempt_' . $this->students[0]->id => $grade->attemptnumber,
+            'quickgrade_' . $this->students[0]->id => '30.0'
+        );
+        $result = $assign->testable_process_save_quick_grades($data);
+        $this->assertContains(get_string('quickgradingchangessaved', 'assign'), $result);
+        $grade = $assign->get_user_grade($this->students[0]->id, false);
+        $this->assertEquals('30.0', $grade->grade);
+
+        // Now update using 'old' data. Should fail.
+        $result = $assign->testable_process_save_quick_grades($pastdata);
+        $this->assertContains(get_string('errorrecordmodified', 'assign'), $result);
+        $grade = $assign->get_user_grade($this->students[0]->id, false);
+        $this->assertEquals('30.0', $grade->grade);
+    }
+}
