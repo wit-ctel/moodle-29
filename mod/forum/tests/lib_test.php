@@ -1502,6 +1502,125 @@ class mod_forum_lib_testcase extends advanced_testcase {
     }
 
     /**
+     * Test forum_user_has_posted_discussion with no groups.
+     */
+    public function test_forum_user_has_posted_discussion_no_groups() {
+        global $CFG;
+
+        $this->resetAfterTest(true);
+
+        $course = self::getDataGenerator()->create_course();
+        $author = self::getDataGenerator()->create_user();
+        $other = self::getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($author->id, $course->id);
+        $forum = self::getDataGenerator()->create_module('forum', (object) ['course' => $course->id ]);
+
+        self::setUser($author);
+
+        // Neither user has posted.
+        $this->assertFalse(forum_user_has_posted_discussion($forum->id, $author->id));
+        $this->assertFalse(forum_user_has_posted_discussion($forum->id, $other->id));
+
+        // Post in the forum.
+        $record = new stdClass();
+        $record->course = $course->id;
+        $record->userid = $author->id;
+        $record->forum = $forum->id;
+        $discussion = self::getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion($record);
+
+        // The author has now posted, but the other user has not.
+        $this->assertTrue(forum_user_has_posted_discussion($forum->id, $author->id));
+        $this->assertFalse(forum_user_has_posted_discussion($forum->id, $other->id));
+    }
+
+    /**
+     * Test forum_user_has_posted_discussion with multiple forums
+     */
+    public function test_forum_user_has_posted_discussion_multiple_forums() {
+        global $CFG;
+
+        $this->resetAfterTest(true);
+
+        $course = self::getDataGenerator()->create_course();
+        $author = self::getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($author->id, $course->id);
+        $forum1 = self::getDataGenerator()->create_module('forum', (object) ['course' => $course->id ]);
+        $forum2 = self::getDataGenerator()->create_module('forum', (object) ['course' => $course->id ]);
+
+        self::setUser($author);
+
+        // No post in either forum.
+        $this->assertFalse(forum_user_has_posted_discussion($forum1->id, $author->id));
+        $this->assertFalse(forum_user_has_posted_discussion($forum2->id, $author->id));
+
+        // Post in the forum.
+        $record = new stdClass();
+        $record->course = $course->id;
+        $record->userid = $author->id;
+        $record->forum = $forum1->id;
+        $discussion = self::getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion($record);
+
+        // The author has now posted in forum1, but not forum2.
+        $this->assertTrue(forum_user_has_posted_discussion($forum1->id, $author->id));
+        $this->assertFalse(forum_user_has_posted_discussion($forum2->id, $author->id));
+    }
+
+    /**
+     * Test forum_user_has_posted_discussion with multiple groups.
+     */
+    public function test_forum_user_has_posted_discussion_multiple_groups() {
+        global $CFG;
+
+        $this->resetAfterTest(true);
+
+        $course = self::getDataGenerator()->create_course();
+        $author = self::getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($author->id, $course->id);
+
+        $group1 = $this->getDataGenerator()->create_group(array('courseid' => $course->id));
+        $group2 = $this->getDataGenerator()->create_group(array('courseid' => $course->id));
+        groups_add_member($group1->id, $author->id);
+        groups_add_member($group2->id, $author->id);
+
+        $forum = self::getDataGenerator()->create_module('forum', (object) ['course' => $course->id ], [
+                    'groupmode' => SEPARATEGROUPS,
+                ]);
+
+        self::setUser($author);
+
+        // The user has not posted in either group.
+        $this->assertFalse(forum_user_has_posted_discussion($forum->id, $author->id));
+        $this->assertFalse(forum_user_has_posted_discussion($forum->id, $author->id, $group1->id));
+        $this->assertFalse(forum_user_has_posted_discussion($forum->id, $author->id, $group2->id));
+
+        // Post in one group.
+        $record = new stdClass();
+        $record->course = $course->id;
+        $record->userid = $author->id;
+        $record->forum = $forum->id;
+        $record->groupid = $group1->id;
+        $discussion = self::getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion($record);
+
+        // The author has now posted in one group, but the other user has not.
+        $this->assertTrue(forum_user_has_posted_discussion($forum->id, $author->id));
+        $this->assertTrue(forum_user_has_posted_discussion($forum->id, $author->id, $group1->id));
+        $this->assertFalse(forum_user_has_posted_discussion($forum->id, $author->id, $group2->id));
+
+        // Post in the other group.
+        $record = new stdClass();
+        $record->course = $course->id;
+        $record->userid = $author->id;
+        $record->forum = $forum->id;
+        $record->groupid = $group2->id;
+        $discussion = self::getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion($record);
+
+        // The author has now posted in one group, but the other user has not.
+        $this->assertTrue(forum_user_has_posted_discussion($forum->id, $author->id));
+        $this->assertTrue(forum_user_has_posted_discussion($forum->id, $author->id, $group1->id));
+        $this->assertTrue(forum_user_has_posted_discussion($forum->id, $author->id, $group2->id));
+    }
+
+    /**
      * Tests the mod_forum_myprofile_navigation() function.
      */
     public function test_mod_forum_myprofile_navigation() {
@@ -1834,5 +1953,221 @@ class mod_forum_lib_testcase extends advanced_testcase {
                 'hasresult'         => true,
             ),
         );
+    }
+
+    /**
+     * @dataProvider forum_get_unmailed_posts_provider
+     */
+    public function test_forum_get_unmailed_posts($discussiondata, $enabletimedposts, $expectedcount, $expectedreplycount) {
+        global $CFG, $DB;
+
+        $this->resetAfterTest();
+
+        // Configure timed posts.
+        $CFG->forum_enabletimedposts = $enabletimedposts;
+
+        $course = $this->getDataGenerator()->create_course();
+        $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
+        $user = $this->getDataGenerator()->create_user();
+        $forumgen = $this->getDataGenerator()->get_plugin_generator('mod_forum');
+
+        // Keep track of the start time of the test. Do not use time() after this point to prevent random failures.
+        $time = time();
+
+        $record = new stdClass();
+        $record->course = $course->id;
+        $record->userid = $user->id;
+        $record->forum = $forum->id;
+        if (isset($discussiondata['timecreated'])) {
+            $record->timemodified = $time + $discussiondata['timecreated'];
+        }
+        if (isset($discussiondata['timestart'])) {
+            $record->timestart = $time + $discussiondata['timestart'];
+        }
+        if (isset($discussiondata['timeend'])) {
+            $record->timeend = $time + $discussiondata['timeend'];
+        }
+        if (isset($discussiondata['mailed'])) {
+            $record->mailed = $discussiondata['mailed'];
+        }
+
+        $discussion = $forumgen->create_discussion($record);
+
+        // Fetch the unmailed posts.
+        $timenow   = $time;
+        $endtime   = $timenow - $CFG->maxeditingtime;
+        $starttime = $endtime - 2 * DAYSECS;
+
+        $unmailed = forum_get_unmailed_posts($starttime, $endtime, $timenow);
+        $this->assertCount($expectedcount, $unmailed);
+
+        // Add a reply just outside the maxeditingtime.
+        $replyto = $DB->get_record('forum_posts', array('discussion' => $discussion->id));
+        $reply = new stdClass();
+        $reply->userid = $user->id;
+        $reply->discussion = $discussion->id;
+        $reply->parent = $replyto->id;
+        $reply->created = max($replyto->created, $endtime - 1);
+        $forumgen->create_post($reply);
+
+        $unmailed = forum_get_unmailed_posts($starttime, $endtime, $timenow);
+        $this->assertCount($expectedreplycount, $unmailed);
+    }
+
+    public function forum_get_unmailed_posts_provider() {
+        return [
+            'Untimed discussion; Single post; maxeditingtime not expired' => [
+                'discussion'        => [
+                ],
+                'timedposts'        => false,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+            'Untimed discussion; Single post; maxeditingtime expired' => [
+                'discussion'        => [
+                    'timecreated'   => - DAYSECS,
+                ],
+                'timedposts'        => false,
+                'postcount'         => 1,
+                'replycount'        => 2,
+            ],
+            'Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime not expired' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => 0,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+            'Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime expired' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => - DAYSECS,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 1,
+                'replycount'        => 2,
+            ],
+            'Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime expired; timeend not reached' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => - DAYSECS,
+                    'timeend'       => + DAYSECS
+                ],
+                'timedposts'        => true,
+                'postcount'         => 1,
+                'replycount'        => 2,
+            ],
+            'Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime expired; timeend passed' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => - DAYSECS,
+                    'timeend'       => - HOURSECS,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+            'Timed discussion; Single post; Posted 1 week ago; timeend not reached' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timeend'       => + DAYSECS
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 1,
+            ],
+            'Timed discussion; Single post; Posted 1 week ago; timeend passed' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timeend'       => - DAYSECS,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+
+            'Previously mailed; Untimed discussion; Single post; maxeditingtime not expired' => [
+                'discussion'        => [
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => false,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+
+            'Previously mailed; Untimed discussion; Single post; maxeditingtime expired' => [
+                'discussion'        => [
+                    'timecreated'   => - DAYSECS,
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => false,
+                'postcount'         => 0,
+                'replycount'        => 1,
+            ],
+            'Previously mailed; Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime not expired' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => 0,
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+            'Previously mailed; Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime expired' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => - DAYSECS,
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 1,
+            ],
+            'Previously mailed; Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime expired; timeend not reached' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => - DAYSECS,
+                    'timeend'       => + DAYSECS,
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 1,
+            ],
+            'Previously mailed; Timed discussion; Single post; Posted 1 week ago; timestart maxeditingtime expired; timeend passed' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timestart'     => - DAYSECS,
+                    'timeend'       => - HOURSECS,
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+            'Previously mailed; Timed discussion; Single post; Posted 1 week ago; timeend not reached' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timeend'       => + DAYSECS,
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 1,
+            ],
+            'Previously mailed; Timed discussion; Single post; Posted 1 week ago; timeend passed' => [
+                'discussion'        => [
+                    'timecreated'   => - WEEKSECS,
+                    'timeend'       => - DAYSECS,
+                    'mailed'        => 1,
+                ],
+                'timedposts'        => true,
+                'postcount'         => 0,
+                'replycount'        => 0,
+            ],
+        ];
     }
 }

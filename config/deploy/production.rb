@@ -17,7 +17,7 @@ set :branch, ENV["BRANCH_NAME"] || "master"
 # definition into the server list. The second argument
 # something that quacks like a hash can be used to set
 # extended properties on the server.
-server 'wit-moodle-web1.heanet.ie', user: 'moodle', roles: %w{ web app }
+server 'wit-moodle-web1.heanet.ie', user: 'moodle', roles: %w{ web app admin }
 server 'wit-moodle-web2.heanet.ie', user: 'moodle', roles: %w{ web app }
 server 'wit-moodle-web3.heanet.ie', user: 'moodle', roles: %w{ web app }
 server 'wit-moodle-web4.heanet.ie', user: 'moodle', roles: %w{ web app }
